@@ -1,6 +1,8 @@
-from casbin import persist
-import redis.asyncio as redis
 import json
+
+import redis.asyncio as redis
+from casbin import persist
+from casbin.persist.adapters.asyncio import AsyncAdapter
 
 
 class CasbinRule:
@@ -39,7 +41,7 @@ class CasbinRule:
         return '<CasbinRule :"{}">'.format(str(self))
 
 
-class Adapter(persist.Adapter):
+class Adapter(AsyncAdapter):
     """the interface for Casbin adapters."""
 
     def __init__(
