@@ -1,5 +1,12 @@
 # Semantic Versioning Changelog
 
+## [1.0.1](https://github.com/pycasbin/async-redis-adapter/compare/v1.0.0...v1.0.1) (2024-01-06)
+
+
+### Bug Fixes
+
+* adapter interface stub ([920e0ee](https://github.com/pycasbin/async-redis-adapter/commit/920e0eeec87d648e613db85254819b993c2ba58a))
+
 # 1.0.0 (2023-09-17)
 
 
