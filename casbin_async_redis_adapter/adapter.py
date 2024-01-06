@@ -98,6 +98,10 @@ class Adapter(persist.Adapter):
         else:
             await self.client.lrem(self.key, 0, json.dumps(line.dict()))
 
+    async def _update_policy_line(self, ptype, old_rule, new_rule):
+        # TODO
+        ...
+
     async def save_policy(self, model) -> bool:
         """Implement add Interface for casbin. Save the policy in mongodb
 
@@ -129,6 +133,21 @@ class Adapter(persist.Adapter):
         await self._save_policy_line(ptype, rule)
         return True
 
+    async def add_policies(self, sec, ptype, rules):
+        """Adds policy rules to redis
+
+        Args:
+            sec (str): Section name, 'g' or 'p'
+            ptype (str): Policy type, 'g', 'g2', 'p', etc.
+            rules (Iterable[CasbinRule]): Casbin rules will be added
+
+        Returns:
+            bool: True if succeed else False
+        """
+        for rule in rules:
+            await self._save_policy_line(ptype, rule)
+        return True
+
     async def remove_policy(self, sec, ptype, rule):
         """Remove policy rules in redis(rules duplicate will all be removed)
 
@@ -141,6 +160,21 @@ class Adapter(persist.Adapter):
             bool: True if succeed else False
         """
         await self._delete_policy_lines(ptype, rule)
+        return True
+
+    async def remove_policies(self, sec, ptype, rules):
+        """Remove policy rules in redis(rules duplicate will all be removed)
+
+        Args:
+            sec (str): Section name, 'g' or 'p'
+            ptype (str): Policy type, 'g', 'g2', 'p', etc.
+            rules (Iterable[CasbinRule]): Casbin rules if it is exactly same as will be removed.
+
+        Returns:
+            bool: True if succeed else False
+        """
+        for rule in rules:
+            await self._delete_policy_lines(ptype, rule)
         return True
 
     async def remove_filtered_policy(self, sec, ptype, field_index, *field_values):
@@ -180,4 +214,35 @@ class Adapter(persist.Adapter):
                 await self.client.lset(self.key, i, "__CASBIN_DELETED__")
 
         await self.client.lrem(self.key, 0, "__CASBIN_DELETED__")
+        return True
+
+    async def update_policy(self, sec, ptype, old_rule, new_rule):
+        """Update policy rule in redis.
+
+        Args:
+            sec (str): section type
+            ptype (str): policy type
+            old_rule (List[str]): old: the old rule that needs to be modified
+            new_rule (List[str]): new: the new rule to replace the old rule
+
+        Returns:
+            bool: True if succeed else False
+        """
+        await self._update_policy_line(ptype, old_rule, new_rule)
+        return True
+
+    async def update_policies(self, sec, ptype, old_rules, new_rules):
+        """Update policy rule in redis.
+
+        Args:
+            sec (str): section type
+            ptype (str): policy type
+            old_rules (List[List[str]]): old: the old rule that needs to be modified
+            new_rules (List[List[str]]): new: the new rule to replace the old rule
+
+        Returns:
+            bool: True if succeed else False
+        """
+        for i in range(len(old_rules)):
+            await self.update_policy(sec, ptype, old_rules[i], new_rules[i])
         return True

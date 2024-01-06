@@ -100,6 +100,33 @@ class TestConfig(IsolatedAsyncioTestCase):
         self.assertTrue(e.enforce("alice", "data2", "read"))
         self.assertTrue(e.enforce("alice", "data2", "write"))
 
+    async def test_add_policies(self):
+        e = await get_enforcer()
+        adapter = e.get_adapter()
+        self.assertTrue(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        self.assertTrue(e.enforce("alice", "data2", "read"))
+        self.assertTrue(e.enforce("alice", "data2", "write"))
+
+        # test add_policy after insert rules
+        await adapter.add_policies(
+            sec="p",
+            ptype="p",
+            rules=(("alice", "data1", "write"), ("bob", "data2", "read")),
+        )
+
+        # reload policies from database
+        await e.load_policy()
+
+        self.assertTrue(e.enforce("alice", "data1", "read"))
+        self.assertTrue(e.enforce("alice", "data1", "write"))
+        self.assertTrue(e.enforce("bob", "data2", "read"))
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        self.assertTrue(e.enforce("alice", "data2", "read"))
+        self.assertTrue(e.enforce("alice", "data2", "write"))
+
     async def test_remove_policy(self):
         """
         test remove_policy
@@ -116,6 +143,37 @@ class TestConfig(IsolatedAsyncioTestCase):
         # test remove_policy after delete a role definition
         result = await adapter.remove_policy(
             sec="g", ptype="g", rule=("alice", "data2_admin")
+        )
+
+        # reload policies from database
+        await e.load_policy()
+
+        self.assertTrue(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "read"))
+        self.assertFalse(e.enforce("alice", "data2", "write"))
+        self.assertTrue(result)
+
+    async def test_remove_policies(self):
+        """
+        test remove_policy
+        """
+        e = await get_enforcer()
+        adapter = e.get_adapter()
+        self.assertTrue(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        self.assertTrue(e.enforce("alice", "data2", "read"))
+        self.assertTrue(e.enforce("alice", "data2", "write"))
+
+        # test remove_policy after delete a role definition
+        result = await adapter.remove_policies(
+            sec="p",
+            ptype="p",
+            rules=(("data2_admin", "data2", "read"), ("data2_admin", "data2", "write")),
         )
 
         # reload policies from database
