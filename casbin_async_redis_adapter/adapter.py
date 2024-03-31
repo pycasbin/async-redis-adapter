@@ -101,7 +101,7 @@ class Adapter(AsyncAdapter):
             await self.client.lrem(self.key, 0, json.dumps(line.dict()))
 
     async def save_policy(self, model) -> bool:
-        """Implement add Interface for casbin. Save the policy in mongodb
+        """Implement add Interface for casbin. Save the policy in redis
 
         Args:
             model (Class Model): Casbin Model which loads from .conf file usually.
@@ -131,6 +131,21 @@ class Adapter(AsyncAdapter):
         await self._save_policy_line(ptype, rule)
         return True
 
+    async def add_policies(self, sec, ptype, rules):
+        """AddPolicies adds policy rules to the storage.
+
+        Args:
+            sec (str): Section name, 'g' or 'p'
+            ptype (str): Policy type, 'g', 'g2', 'p', etc.
+            rules: Casbin rules will be added
+
+        Returns:
+            bool: True if succeed else False
+        """
+        for rule in rules:
+            await self.add_policy(sec, ptype, rule)
+        return True
+
     async def remove_policy(self, sec, ptype, rule):
         """Remove policy rules in redis(rules duplicate will all be removed)
 
@@ -143,6 +158,21 @@ class Adapter(AsyncAdapter):
             bool: True if succeed else False
         """
         await self._delete_policy_lines(ptype, rule)
+        return True
+
+    async def remove_policies(self, sec, ptype, rules):
+        """RemovePolicies removes policy rules from the storage.
+
+        Args:
+            sec (str): Section name, 'g' or 'p'
+            ptype (str): Policy type, 'g', 'g2', 'p', etc.
+            rules: Casbin rules will be removed
+
+        Returns:
+            bool: True if succeed else False
+        """
+        for rule in rules:
+            await self.remove_policy(sec, ptype, rule)
         return True
 
     async def remove_filtered_policy(self, sec, ptype, field_index, *field_values):
@@ -182,4 +212,91 @@ class Adapter(AsyncAdapter):
                 await self.client.lset(self.key, i, "__CASBIN_DELETED__")
 
         await self.client.lrem(self.key, 0, "__CASBIN_DELETED__")
+        return True
+
+    async def update_policy(self, sec, ptype, old_rule, new_rule):
+        """
+        update_policy updates a policy rule from storage.
+        This is part of the Auto-Save feature.
+
+        Args:
+            sec (str): Section name, 'g' or 'p'
+            ptype (str): Policy type, 'g', 'g2', 'p', etc.
+            old_rule: Casbin rule if it is exactly same as will be removed.
+            new_rule: Casbin rule if it is exactly same as will be added.
+
+        Returns:
+            bool: True if succeed else False
+        """
+        old_rule_obj = CasbinRule(ptype=ptype)
+        new_rule_obj = CasbinRule(ptype=ptype)
+        for index, value in enumerate(old_rule):
+            setattr(old_rule_obj, f"v{index}", value)
+        for index, value in enumerate(new_rule):
+            setattr(new_rule_obj, f"v{index}", value)
+
+        # Convert old_rule_obj and new_rule_obj to json
+        old_rule_json = json.dumps(old_rule_obj.dict())
+        new_rule_json = json.dumps(new_rule_obj.dict())
+
+        lua_script = """
+            local old_rule_json = ARGV[1]
+            local new_rule_json = ARGV[2]
+            local rules = redis.call('lrange', KEYS[1], 0, -1)
+            for i, rule_json in ipairs(rules) do
+                local rule = cjson.decode(rule_json)
+                if rule.ptype == ARGV[3] and rule_json == old_rule_json then
+                    redis.call('lset', KEYS[1], i-1, new_rule_json)
+                    return 1
+                end
+            end
+            return 0
+            """
+
+        result = await self.client.eval(
+            lua_script, 1, self.key, old_rule_json, new_rule_json, ptype
+        )
+
+        return result == 1
+
+    async def update_policies(self, sec, ptype, old_rules, new_rules):
+        """
+        UpdatePolicies updates some policy rules to storage, like db, redis.
+
+        Args:
+            sec (str): Section name, 'g' or 'p'
+            ptype (str): Policy type, 'g', 'g2', 'p', etc.
+            old_rules: Casbin rule if it is exactly same as will be removed.
+            new_rules: Casbin rule if it is exactly same as will be added.
+
+        Returns:
+            bool: True if succeed else False
+        """
+        for i in range(len(old_rules)):
+            await self.update_policy(sec, ptype, old_rules[i], new_rules[i])
+        return True
+
+    async def update_filtered_policies(
+        self, sec, ptype, new_rules, field_index, *field_values
+    ):
+        """
+        update_filtered_policies deletes old rules and adds new rules.
+
+        Args:
+            sec (str): Section name, 'g' or 'p'
+            ptype (str): Policy type, 'g', 'g2', 'p', etc.
+            new_rules: Casbin rule if it is exactly same as will be added.
+            field_index (int): The policy index at which the filed_values begins filtering. Its range is [0, 5]
+            field_values(List[str]): A list of rules to filter policy which starts from
+
+        Returns:
+            bool: True if succeed else False
+        """
+        if not (0 <= field_index <= 5):
+            return False
+        if not (1 <= field_index + len(field_values) <= 6):
+            return False
+
+        await self.remove_filtered_policy(sec, ptype, field_index, *field_values)
+        await self.add_policies(sec, ptype, new_rules)
         return True
