@@ -1,5 +1,12 @@
 # Semantic Versioning Changelog
 
+# [1.2.0](https://github.com/pycasbin/async-redis-adapter/compare/v1.1.0...v1.2.0) (2024-04-06)
+
+
+### Features
+
+* support BatchAdapter and UpdateAdapter interfaces ([#6](https://github.com/pycasbin/async-redis-adapter/issues/6)) ([2065a79](https://github.com/pycasbin/async-redis-adapter/commit/2065a791120e4563d019ee450c940074012611e4))
+
 # [1.1.0](https://github.com/pycasbin/async-redis-adapter/compare/v1.0.1...v1.1.0) (2024-03-29)
 
 
